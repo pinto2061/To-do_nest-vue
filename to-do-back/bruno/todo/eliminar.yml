@@ -1,0 +1,19 @@
+info:
+  name: eliminar
+  type: http
+  seq: 4
+
+http:
+  method: DELETE
+  url: http://localhost:3000/tareas/:id
+  params:
+    - name: id
+      value: ""
+      type: path
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

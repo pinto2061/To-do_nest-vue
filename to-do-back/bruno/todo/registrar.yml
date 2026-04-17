@@ -1,0 +1,18 @@
+info:
+  name: registrar
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/tareas
+  body:
+    type: json
+    data: '{"nombre": "Aprender NestJS", "descripcion": "Crear mi primer CRUD con Bun"}'
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
