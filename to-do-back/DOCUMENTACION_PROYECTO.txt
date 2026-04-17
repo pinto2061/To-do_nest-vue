@@ -1,0 +1,347 @@
+================================================================================
+  DOCUMENTACIÓN DEL PROYECTO: To-Do NestJS + Vue
+  Backend: to-do-back (NestJS + TypeORM + PostgreSQL)
+================================================================================
+
+Fecha de documentación: 17 de Abril, 2026
+Runtime: Bun v1.3.12
+Framework: NestJS v11
+ORM: TypeORM
+Base de datos: PostgreSQL
+
+================================================================================
+ 1. ESTRUCTURA GENERAL DEL PROYECTO
+================================================================================
+
+to-do-back/
+├── src/
+│   ├── main.ts                          → Punto de entrada de la aplicación
+│   ├── app.module.ts                    → Módulo raíz (configura DB y módulos)
+│   ├── app.controller.ts               → Controller raíz (ruta de prueba)
+│   ├── app.service.ts                   → Service raíz
+│   └── tasks/                           → MÓDULO DE TAREAS (CRUD)
+│       ├── entities/
+│       │   └── task.entity.ts           → Entidad/Modelo (define la tabla)
+│       ├── dto/
+│       │   ├── create-task.dto.ts       → DTO para crear tareas
+│       │   └── update-task.dto.ts       → DTO para actualizar tareas
+│       ├── tasks.controller.ts          → Controlador (rutas HTTP)
+│       ├── tasks.service.ts             → Servicio (lógica de negocio)
+│       ├── tasks.module.ts              → Módulo (agrupa todo)
+│       ├── tasks.controller.spec.ts     → Tests del controller
+│       └── tasks.service.spec.ts        → Tests del service
+├── bruno/                               → Colección de peticiones Bruno (testing API)
+├── package.json                         → Dependencias y scripts
+├── tsconfig.json                        → Configuración de TypeScript
+└── nest-cli.json                        → Configuración del CLI de NestJS
+
+================================================================================
+ 2. ¿CÓMO FUNCIONA NESTJS? (Conceptos Clave)
+================================================================================
+
+NestJS organiza el código en MÓDULOS, y cada módulo tiene 3 piezas principales:
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │                         MÓDULO (Module)                           │
+  │                                                                     │
+  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐  │
+  │  │  Controller  │──>│   Service    │──>│  Repository/Entity   │  │
+  │  │  (Rutas HTTP)│   │  (Lógica)   │   │  (Base de datos)     │  │
+  │  └──────────────┘   └──────────────┘   └──────────────────────┘  │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  - CONTROLLER: Recibe peticiones HTTP (GET, POST, PATCH, DELETE).
+                Solo se encarga de recibir datos y devolver respuestas.
+
+  - SERVICE:    Contiene la lógica de negocio. Es donde se hacen las
+                consultas a la base de datos usando el Repository.
+
+  - ENTITY:     Define la estructura de una tabla en la base de datos.
+                TypeORM la usa para crear/modificar tablas automáticamente.
+
+  - DTO:        Define la forma de los datos que el cliente envía.
+                Sirve para validar y limitar qué campos acepta la API.
+
+  - MODULE:     Agrupa todo lo anterior en un paquete. Se importa en
+                el módulo raíz (AppModule) para que NestJS lo cargue.
+
+================================================================================
+ 3. ARCHIVOS DEL PROYECTO - EXPLICACIÓN DETALLADA
+================================================================================
+
+─────────────────────────────────────────────────────────────────────────────────
+ 3.1  main.ts  -  Punto de entrada
+─────────────────────────────────────────────────────────────────────────────────
+
+  Este archivo es el PRIMERO que se ejecuta al iniciar la aplicación.
+
+  ¿Qué hace?
+  1. Crea una instancia de la aplicación NestJS usando AppModule.
+  2. Inicia el servidor HTTP en el puerto 3000 (o el puerto definido
+     en la variable de entorno PORT).
+
+  Comando para ejecutar: bun run src/main.ts
+  Comando en modo watch: bun --watch src/main.ts
+
+─────────────────────────────────────────────────────────────────────────────────
+ 3.2  app.module.ts  -  Módulo raíz
+─────────────────────────────────────────────────────────────────────────────────
+
+  Es el módulo principal de la aplicación. Aquí se configura:
+
+  1. CONEXIÓN A LA BASE DE DATOS (TypeOrmModule.forRoot):
+     - Tipo: PostgreSQL
+     - Host: localhost
+     - Puerto: 5432
+     - Usuario: postgres
+     - Contraseña: 12345678
+     - Base de datos: todo
+     - synchronize: true → TypeORM crea/actualiza las tablas
+       automáticamente según las entidades definidas.
+       ⚠️ IMPORTANTE: synchronize:true SOLO debe usarse en desarrollo.
+       En producción puede causar pérdida de datos.
+
+  2. IMPORTACIÓN DE MÓDULOS:
+     - TasksModule → Carga el módulo de tareas con todo su CRUD.
+
+─────────────────────────────────────────────────────────────────────────────────
+ 3.3  task.entity.ts  -  Entidad (Modelo de la tabla)
+─────────────────────────────────────────────────────────────────────────────────
+
+  Define la estructura de la tabla "task" en PostgreSQL.
+
+  COLUMNAS:
+  ┌──────────────┬──────────────┬──────────────────────────────────────┐
+  │ Campo        │ Tipo SQL     │ Descripción                          │
+  ├──────────────┼──────────────┼──────────────────────────────────────┤
+  │ id           │ UUID         │ Clave primaria, se genera sola       │
+  │ nombre       │ VARCHAR      │ Nombre de la tarea (obligatorio)     │
+  │ descripcion  │ TEXT         │ Descripción (puede ser NULL)         │
+  │ estado       │ ENUM         │ 'pendiente' (default) o 'hecho'      │
+  │ creado       │ TIMESTAMP    │ Fecha de creación (automática)       │
+  │ actualizado  │ TIMESTAMP    │ Fecha de actualización (automática)  │
+  └──────────────┴──────────────┴──────────────────────────────────────┘
+
+  ENUM TaskStatus:
+  - PENDIENTE = 'pendiente'  → Estado inicial de toda tarea nueva
+  - HECHO     = 'hecho'      → Cuando la tarea se completa
+
+  Decoradores importantes de TypeORM:
+  - @Entity()                    → Marca la clase como tabla
+  - @PrimaryGeneratedColumn('uuid') → Genera UUIDs automáticos
+  - @Column()                    → Define una columna normal
+  - @CreateDateColumn()          → Se llena automáticamente al INSERT
+  - @UpdateDateColumn()          → Se actualiza automáticamente al UPDATE
+
+─────────────────────────────────────────────────────────────────────────────────
+ 3.4  create-task.dto.ts  -  DTO de creación
+─────────────────────────────────────────────────────────────────────────────────
+
+  Define qué datos debe enviar el cliente para CREAR una tarea.
+
+  Campos:
+  - nombre (string)      → Obligatorio
+  - descripcion (string) → Obligatorio en el DTO
+
+  ¿Por qué NO incluye "id", "estado", "creado" ni "actualizado"?
+  Porque esos campos se generan automáticamente por TypeORM.
+  El DTO solo incluye lo que el CLIENTE debe enviar.
+
+─────────────────────────────────────────────────────────────────────────────────
+ 3.5  update-task.dto.ts  -  DTO de actualización
+─────────────────────────────────────────────────────────────────────────────────
+
+  Extiende de CreateTaskDto usando PartialType(), lo que convierte
+  todos los campos en OPCIONALES.
+
+  Nota: Actualmente NO se usa directamente porque la actualización
+  solo cambia el estado (PATCH /tareas/:id/estado). Se conserva
+  por si en el futuro se permite editar nombre o descripción.
+
+─────────────────────────────────────────────────────────────────────────────────
+ 3.6  tasks.service.ts  -  Servicio (Lógica de negocio)
+─────────────────────────────────────────────────────────────────────────────────
+
+  Contiene los 5 métodos del CRUD:
+
+  1. create(dto)
+     - Crea una instancia Task con los datos del DTO.
+     - La guarda en la base de datos con .save().
+     - Devuelve la tarea creada (con id y fechas generados).
+
+  2. findAll()
+     - Ejecuta: SELECT * FROM task;
+     - Devuelve un array con todas las tareas.
+
+  3. findOne(id)
+     - Busca una tarea por su UUID.
+     - Si NO existe → lanza NotFoundException (HTTP 404).
+     - Si existe → devuelve la tarea.
+
+  4. updateStatus(id, nuevoEstado)
+     - Busca la tarea (reutiliza findOne).
+     - Cambia el campo "estado" al nuevo valor.
+     - Guarda con .save() (detecta que ya tiene id → hace UPDATE).
+     - Actualiza automáticamente la columna "actualizado".
+
+  5. remove(id)
+     - Ejecuta: DELETE FROM task WHERE id = 'xxx';
+     - Si no eliminó nada (affected === 0) → lanza 404.
+
+  Inyección de dependencias:
+  - @InjectRepository(Task) inyecta el Repository de TypeORM.
+  - El Repository proporciona métodos: .create(), .save(), .find(),
+    .findOneBy(), .delete(), etc.
+
+─────────────────────────────────────────────────────────────────────────────────
+ 3.7  tasks.controller.ts  -  Controlador (Rutas HTTP)
+─────────────────────────────────────────────────────────────────────────────────
+
+  Define los endpoints de la API REST:
+
+  ┌────────┬─────────────────────┬─────────────────────────────────────┐
+  │ Método │ Ruta                │ Descripción                         │
+  ├────────┼─────────────────────┼─────────────────────────────────────┤
+  │ POST   │ /tareas             │ Crear tarea nueva                   │
+  │ GET    │ /tareas             │ Listar todas las tareas             │
+  │ GET    │ /tareas/:id         │ Obtener tarea por ID                │
+  │ PATCH  │ /tareas/:id/estado  │ Cambiar estado (hecho/pendiente)    │
+  │ DELETE │ /tareas/:id         │ Eliminar tarea permanentemente      │
+  └────────┴─────────────────────┴─────────────────────────────────────┘
+
+  Decoradores importantes de NestJS:
+  - @Controller('tareas') → Prefijo de ruta para todos los endpoints
+  - @Get()               → Método HTTP GET
+  - @Post()              → Método HTTP POST
+  - @Patch()             → Método HTTP PATCH
+  - @Delete()            → Método HTTP DELETE
+  - @Param('id')         → Extrae un parámetro de la URL
+  - @Body()              → Extrae el cuerpo de la petición
+  - @Body('campo')       → Extrae un campo específico del body
+
+─────────────────────────────────────────────────────────────────────────────────
+ 3.8  tasks.module.ts  -  Módulo de Tareas
+─────────────────────────────────────────────────────────────────────────────────
+
+  Agrupa todos los componentes del CRUD de tareas:
+
+  - imports:     TypeOrmModule.forFeature([Task])
+                 → Registra el Repository de Task para inyección
+  - controllers: [TasksController]
+                 → Registra las rutas HTTP
+  - providers:   [TasksService]
+                 → Registra el servicio para inyección
+
+  Este módulo se importa en AppModule para activarlo.
+
+================================================================================
+ 4. FLUJO COMPLETO DE UNA PETICIÓN (Ejemplo: Crear tarea)
+================================================================================
+
+  1. El cliente envía:
+     POST http://localhost:3000/tareas
+     Body: { "nombre": "Estudiar", "descripcion": "TypeORM" }
+
+  2. NestJS recibe la petición y la dirige a TasksController.create()
+     porque coincide con @Post() en @Controller('tareas').
+
+  3. El decorador @Body() convierte el JSON del body en un objeto
+     CreateTaskDto: { nombre: "Estudiar", descripcion: "TypeORM" }
+
+  4. El controller llama a TasksService.create(dto).
+
+  5. El service usa taskRepository.create(dto) para crear un objeto
+     Task en memoria (con estado = 'pendiente' por defecto).
+
+  6. El service usa taskRepository.save(task) para insertar en
+     PostgreSQL. TypeORM ejecuta:
+     INSERT INTO task (id, nombre, descripcion, estado, creado, actualizado)
+     VALUES (uuid_generate_v4(), 'Estudiar', 'TypeORM', 'pendiente', NOW(), NOW());
+
+  7. PostgreSQL devuelve el registro insertado con el UUID generado.
+
+  8. La respuesta viaja de vuelta:
+     Service → Controller → Cliente
+
+  9. El cliente recibe el JSON:
+     {
+       "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+       "nombre": "Estudiar",
+       "descripcion": "TypeORM",
+       "estado": "pendiente",
+       "creado": "2026-04-17T15:30:00.000Z",
+       "actualizado": "2026-04-17T15:30:00.000Z"
+     }
+
+================================================================================
+ 5. CÓMO EJECUTAR EL PROYECTO
+================================================================================
+
+  Requisitos:
+  - Bun instalado (v1.3+)
+  - PostgreSQL corriendo en localhost:5432
+  - Base de datos "todo" creada en PostgreSQL
+
+  Crear la base de datos (si no existe):
+  $ psql -U postgres
+  postgres=# CREATE DATABASE todo;
+
+  Instalar dependencias:
+  $ cd to-do-back
+  $ bun install
+
+  Ejecutar en modo desarrollo (con hot-reload):
+  $ bun run start:dev
+
+  Ejecutar normalmente:
+  $ bun run start
+
+  El servidor estará disponible en: http://localhost:3000
+
+================================================================================
+ 6. EJEMPLOS DE PETICIONES (API REST)
+================================================================================
+
+  --- Crear tarea ---
+  POST http://localhost:3000/tareas
+  Content-Type: application/json
+  {
+    "nombre": "Estudiar NestJS",
+    "descripcion": "Completar el módulo de TypeORM"
+  }
+
+  --- Listar todas las tareas ---
+  GET http://localhost:3000/tareas
+
+  --- Obtener tarea por ID ---
+  GET http://localhost:3000/tareas/UUID-DE-LA-TAREA
+
+  --- Cambiar estado a "hecho" ---
+  PATCH http://localhost:3000/tareas/UUID-DE-LA-TAREA/estado
+  Content-Type: application/json
+  {
+    "estado": "hecho"
+  }
+
+  --- Cambiar estado a "pendiente" ---
+  PATCH http://localhost:3000/tareas/UUID-DE-LA-TAREA/estado
+  Content-Type: application/json
+  {
+    "estado": "pendiente"
+  }
+
+  --- Eliminar tarea ---
+  DELETE http://localhost:3000/tareas/UUID-DE-LA-TAREA
+
+================================================================================
+ 7. TECNOLOGÍAS USADAS
+================================================================================
+
+  - NestJS v11      → Framework backend para Node.js / Bun
+  - TypeORM         → ORM para mapear clases a tablas SQL
+  - PostgreSQL      → Base de datos relacional
+  - Bun v1.3        → Runtime de JavaScript (alternativa a Node.js)
+  - TypeScript      → Superset de JavaScript con tipado estático
+  - Bruno           → Cliente HTTP para testing de APIs (carpeta bruno/)
+
+================================================================================
