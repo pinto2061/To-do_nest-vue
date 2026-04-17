@@ -46,7 +46,7 @@ NestJS organiza el código en MÓDULOS, y cada módulo tiene 3 piezas principale
   │                                                                     │
   │  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐  │
   │  │  Controller  │──>│   Service    │──>│  Repository/Entity   │  │
-  │  │  (Rutas HTTP)│   │  (Lógica)   │   │  (Base de datos)     │  │
+  │  │  (Rutas HTTP)│   │  (Lógica)    │   │  (Base de datos)     │  │
   │  └──────────────┘   └──────────────┘   └──────────────────────┘  │
   └─────────────────────────────────────────────────────────────────────┘
 
